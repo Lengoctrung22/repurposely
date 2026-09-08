@@ -14,6 +14,7 @@ import {
   LogIn,
   LogOut,
   User as UserIcon,
+  Shield,
 } from "lucide-react";
 import { SettingsModal } from "@/components/settings-modal";
 
@@ -22,7 +23,7 @@ export function Navbar() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [hasCustomKey, setHasCustomKey] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; email: string; role?: string } | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -31,14 +32,22 @@ export function Navbar() {
       setHasCustomKey(Boolean(key && key.trim().length > 0));
 
       // Check stored Demo user
-      const storedUser = localStorage.getItem("repurposely_demo_user");
-      if (storedUser) {
-        try {
-          setUser(JSON.parse(storedUser));
-        } catch {
-          // ignore
+      const loadUser = () => {
+        const storedUser = localStorage.getItem("repurposely_demo_user");
+        if (storedUser) {
+          try {
+            setUser(JSON.parse(storedUser));
+          } catch {
+            setUser(null);
+          }
+        } else {
+          setUser(null);
         }
-      }
+      };
+
+      loadUser();
+      window.addEventListener("storage", loadUser);
+      window.addEventListener("user-role-changed", loadUser);
 
       // Check theme
       const isDark =
@@ -50,6 +59,11 @@ export function Navbar() {
       } else {
         document.documentElement.classList.remove("dark");
       }
+
+      return () => {
+        window.removeEventListener("storage", loadUser);
+        window.removeEventListener("user-role-changed", loadUser);
+      };
     }
   }, []);
 
@@ -115,6 +129,21 @@ export function Navbar() {
               <History className="h-4 w-4" />
               <span>Lịch sử & Kho lưu trữ</span>
             </Link>
+
+            {/* Admin Link (visible if user is admin or already in admin route) */}
+            {(user?.role === "admin" || pathname === "/admin") && (
+              <Link
+                href="/admin"
+                className={`flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  pathname === "/admin"
+                    ? "bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/60 font-semibold"
+                    : "text-amber-700 hover:bg-amber-50/80 dark:text-amber-400 dark:hover:bg-amber-950/40"
+                }`}
+              >
+                <Shield className="h-4 w-4 text-amber-500" />
+                <span>Quản trị</span>
+              </Link>
+            )}
           </nav>
 
           {/* Status & Actions */}

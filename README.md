@@ -19,6 +19,11 @@
 - 🔑 **Cấu Hình API Key Trực Tiếp Trong Trình Duyệt**: Hỗ trợ modal nhập và kiểm tra kết nối Gemini API Key ngay trên giao diện (lưu trong `localStorage`), kèm cơ chế **Intelligent Dynamic Synthesizer** chạy ngoại tuyến khi chưa có API key.
 - 🌗 **Dark / Light Mode**: Hỗ trợ chuyển đổi giao diện sáng/tối mượt mà và ghi nhớ thiết lập.
 - 🔐 **Hệ thống xác thực toàn diện**: Hỗ trợ đăng ký tài khoản mới (`/register`) và đăng nhập bằng Email & Mật khẩu được mã hóa bcryptjs trong MongoDB, bên cạnh Google OAuth và chế độ 1-Click Instant Demo.
+- 🛡️ **Bảng Điều Khiển Quản Trị & Kiểm Duyệt Toàn Diện (`/admin`)**:
+  - **Thống kê & Phân tích (Analytics)**: 4 thẻ KPI động, biểu đồ tỷ lệ phân bổ nguồn nội dung (YouTube vs Blog/Article), luồng hoạt động người dùng & bài viết gần đây.
+  - **Quản lý người dùng (User Management)**: Tìm kiếm, lọc theo vai trò/trạng thái, phân quyền Admin/User, khóa/mở khóa tài khoản (Ban/Unban) và xóa tài khoản.
+  - **Kiểm duyệt nội dung (Content Moderation)**: Duyệt toàn bộ bài viết trên hệ thống, modal xem trước chi tiết (Takeaways, LinkedIn, Twitter, Newsletter), xóa bài vi phạm và xuất báo cáo CSV (`/api/admin/jobs?format=csv`).
+  - **Dev Mode Quick Switcher**: Nút chuyển đổi nhanh quyền Admin/User ngay trên thanh thông báo để phục vụ kiểm thử và trải nghiệm tức thì.
 
 ---
 
@@ -94,13 +99,17 @@ Mở trình duyệt và truy cập [http://localhost:3000](http://localhost:3000
 src/
 ├── app/
 │   ├── api/
+│   │   ├── admin/stats/route.ts         # API thống kê tổng quan (KPIs, phân bổ nguồn, hoạt động gần đây)
+│   │   ├── admin/users/route.ts         # API quản lý user (tìm kiếm, đổi vai trò, khóa, xóa)
+│   │   ├── admin/jobs/route.ts          # API kiểm duyệt bài viết & xuất file CSV
 │   │   ├── auth/[...nextauth]/route.ts  # NextAuth endpoints
 │   │   ├── auth/register/route.ts       # API đăng ký tài khoản Email & Mật khẩu
 │   │   ├── auth/login/route.ts          # API đăng nhập tài khoản Email & Mật khẩu
 │   │   ├── extract/route.ts             # API trích xuất YouTube & Blog
 │   │   ├── generate/route.ts            # API sinh bài viết AI & lưu MongoDB
 │   │   └── jobs/                        # API danh sách và chi tiết bài viết
-│   ├── dashboard/page.tsx               # Bảng điều khiển, bộ lọc, xuất file & modal chi tiết
+│   ├── admin/page.tsx                   # Bảng điều khiển quản trị viên (Analytics, Users, Moderation)
+│   ├── dashboard/page.tsx               # Bảng điều khiển cá nhân, bộ lọc, xuất file & modal chi tiết
 │   ├── login/page.tsx                   # Trang đăng nhập Email/Password & Google
 │   ├── register/page.tsx                # Trang đăng ký tài khoản mới
 │   ├── layout.tsx                       # Root Layout & Theme Provider

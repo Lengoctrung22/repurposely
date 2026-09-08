@@ -6,6 +6,7 @@ export interface IUser extends Document {
   password?: string;
   authProvider?: "credentials" | "google" | "demo";
   role?: string;
+  status?: "active" | "banned";
   image?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -21,7 +22,8 @@ const UserSchema = new Schema<IUser>(
       enum: ["credentials", "google", "demo"],
       default: "credentials",
     },
-    role: { type: String, default: "user" },
+    role: { type: String, enum: ["user", "admin"], default: "user", index: true },
+    status: { type: String, enum: ["active", "banned"], default: "active", index: true },
     image: { type: String },
   },
   {

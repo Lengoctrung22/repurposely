@@ -30,7 +30,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. Kiểm tra xem tài khoản này có mật khẩu không (tránh trường hợp chỉ đăng nhập bằng Google)
+    // 4. Kiểm tra xem tài khoản có bị khóa không
+    if (user.status === "banned") {
+      return NextResponse.json(
+        { error: "Tài khoản của bạn đã bị khóa bởi Quản trị viên. Vui lòng liên hệ hỗ trợ." },
+        { status: 403 }
+      );
+    }
+
+    // 5. Kiểm tra xem tài khoản này có mật khẩu không (tránh trường hợp chỉ đăng nhập bằng Google)
     if (!user.password) {
       return NextResponse.json(
         { error: "Tài khoản này được tạo bằng Google OAuth. Vui lòng chọn 'Tiếp tục bằng Google'." },
@@ -56,6 +64,7 @@ export async function POST(req: NextRequest) {
         name: user.name,
         email: user.email,
         role: user.role || "user",
+        status: user.status || "active",
       },
     });
   } catch (error: unknown) {
