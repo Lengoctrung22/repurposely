@@ -203,16 +203,32 @@ HÃY TRẢ VỀ DUY NHẤT MỘT ĐỐI TƯỢNG JSON HỢP LỆ THEO CẤU TRÚ
 }
 `;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        temperature: 0.1,
-      },
-    });
+    const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+    let responseText = "";
 
-    const responseText = response.text?.trim() || "{}";
+    for (const modelName of modelsToTry) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            temperature: 0.1,
+          },
+        });
+        if (response.text) {
+          responseText = response.text.trim();
+          break;
+        }
+      } catch (err) {
+        console.warn(`Moderation with ${modelName} failed, trying fallback...`);
+      }
+    }
+
+    if (!responseText) {
+      return analyzeHeuristic(combinedText);
+    }
+
     const cleaned = responseText.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
     const parsed = JSON.parse(cleaned);
 

@@ -102,8 +102,8 @@ HÃY PHẢN HỒI DUY NHẤT MỘT ĐỐI TƯỢNG JSON HỢP LỆ THEO ĐÚNG C
 }
 `;
 
-  // Thử model gemini-2.0-flash, nếu fail thì fallback sang gemini-1.5-flash
-  const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash"];
+  // Thử model gemini-2.5-flash trước, nếu fail thì fallback sang gemini-2.0-flash và gemini-1.5-flash
+  const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
 
   for (const modelName of modelsToTry) {
     try {
