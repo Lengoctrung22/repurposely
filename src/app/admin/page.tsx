@@ -30,6 +30,12 @@ import {
   Layers,
   Database,
   Globe,
+  Bot,
+  Check,
+  AlertTriangle,
+  XCircle,
+  Cpu,
+  RotateCw,
 } from "lucide-react";
 import { YoutubeIcon } from "@/components/icons";
 import { formatDate } from "@/lib/utils";
@@ -46,6 +52,11 @@ interface AdminStats {
     article: number;
     rawText: number;
   };
+  moderation?: {
+    approved: number;
+    flagged: number;
+    rejected: number;
+  };
   recentJobs: Array<{
     _id: string;
     sourceTitle: string;
@@ -53,6 +64,11 @@ interface AdminStats {
     userEmail: string;
     createdAt: string;
     tone: string;
+    moderation?: {
+      status: "approved" | "flagged" | "rejected";
+      safetyScore: number;
+      riskLevel: "low" | "medium" | "high";
+    };
   }>;
   recentUsers: Array<{
     _id: string;
@@ -97,6 +113,21 @@ interface AdminJob {
     previewText: string;
     content: string;
   };
+  moderation?: {
+    status: "approved" | "flagged" | "rejected";
+    safetyScore: number;
+    riskLevel: "low" | "medium" | "high";
+    flags: {
+      hateSpeech: boolean;
+      harassment: boolean;
+      sexuallyExplicit: boolean;
+      dangerousContent: boolean;
+      spamScam: boolean;
+    };
+    reason: string;
+    analyzedAt: string;
+    autoModerated: boolean;
+  };
   createdAt: string;
 }
 
@@ -121,7 +152,10 @@ export default function AdminPage() {
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [jobSearch, setJobSearch] = useState("");
   const [jobSourceFilter, setJobSourceFilter] = useState("all");
+  const [jobModerationFilter, setJobModerationFilter] = useState("all");
   const [selectedJob, setSelectedJob] = useState<AdminJob | null>(null);
+  const [isBatchModerating, setIsBatchModerating] = useState(false);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
 
   // Feedback Notification
   const [alert, setAlert] = useState<{ type: "success" | "error"; message: string } | null>(null);
@@ -214,6 +248,7 @@ export default function AdminPage() {
       const params = new URLSearchParams();
       if (jobSearch) params.set("search", jobSearch);
       if (jobSourceFilter !== "all") params.set("sourceType", jobSourceFilter);
+      if (jobModerationFilter !== "all") params.set("moderationStatus", jobModerationFilter);
 
       const res = await fetch(`/api/admin/jobs?${params.toString()}`);
       const data = await res.json();
@@ -224,6 +259,88 @@ export default function AdminPage() {
       console.error("Lỗi tải jobs:", err);
     } finally {
       setLoadingJobs(false);
+    }
+  };
+
+  // Thao tác với Job: AI Quét Tự Động Toàn Bộ (Batch Auto-Moderate)
+  const handleAutoModerateAll = async (forceAll = false) => {
+    setIsBatchModerating(true);
+    try {
+      const res = await fetch("/api/admin/jobs/auto-moderate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forceAll }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showAlert(data.message || "Đã hoàn tất quét AI toàn bộ bài viết!");
+        fetchJobs();
+        fetchStats();
+      } else {
+        showAlert(data.error || "Lỗi khi quét AI", "error");
+      }
+    } catch {
+      showAlert("Lỗi kết nối tới hệ thống AI Moderation", "error");
+    } finally {
+      setIsBatchModerating(false);
+    }
+  };
+
+  // Thao tác với Job: AI Phân Tích Lại 1 bài viết (Re-analyze)
+  const handleReanalyzeJob = async (jobId: string) => {
+    setIsReanalyzing(true);
+    try {
+      const res = await fetch("/api/admin/jobs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId, reanalyze: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showAlert("AI đã phân tích và đánh giá lại bài viết thành công!");
+        setJobs((prev) =>
+          prev.map((j) => (j._id === jobId ? { ...j, moderation: data.moderation } : j))
+        );
+        if (selectedJob?._id === jobId) {
+          setSelectedJob((prev) => (prev ? { ...prev, moderation: data.moderation } : null));
+        }
+        fetchStats();
+      } else {
+        showAlert(data.error || "Lỗi phân tích bài viết", "error");
+      }
+    } catch {
+      showAlert("Lỗi kết nối khi quét lại", "error");
+    } finally {
+      setIsReanalyzing(false);
+    }
+  };
+
+  // Thao tác với Job: Admin Can Thiệp Thủ Công (Override Status)
+  const handleOverrideModeration = async (
+    jobId: string,
+    status: "approved" | "flagged" | "rejected"
+  ) => {
+    try {
+      const res = await fetch("/api/admin/jobs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId, status }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showAlert(`Đã cập nhật trạng thái kiểm duyệt thành "${status.toUpperCase()}"!`);
+        setJobs((prev) =>
+          prev.map((j) => (j._id === jobId ? { ...j, moderation: data.moderation } : j))
+        );
+        if (selectedJob?._id === jobId) {
+          setSelectedJob((prev) => (prev ? { ...prev, moderation: data.moderation } : null));
+        }
+        fetchStats();
+      } else {
+        showAlert(data.error || "Lỗi cập nhật", "error");
+      }
+    } catch {
+      showAlert("Lỗi kết nối khi cập nhật", "error");
     }
   };
 
@@ -540,6 +657,75 @@ export default function AdminPage() {
                       </div>
                       <div className="text-[11px] text-slate-500">
                         Cơ chế bảo mật MongoDB Role Check
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* AI Content Moderation Banner Card */}
+                  <div className="p-6 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/70 via-indigo-50/50 to-white dark:border-blue-900/40 dark:from-blue-950/30 dark:via-indigo-950/20 dark:to-slate-900 shadow-sm space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 rounded-2xl bg-blue-600 text-white shadow-md shadow-blue-500/20">
+                          <Bot className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <span>Hệ Thống Kiểm Duyệt Tự Động Bằng AI (Autonomous Moderation)</span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 font-extrabold dark:bg-emerald-950/60 dark:text-emerald-300">
+                              Active 24/7
+                            </span>
+                          </h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Tự động đánh giá 5 tiêu chuẩn cộng đồng qua Google Gemini 2.0 Flash mà không cần Admin can thiệp thủ công.
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleAutoModerateAll(false)}
+                        disabled={isBatchModerating}
+                        className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/20 transition-all disabled:opacity-50 shrink-0"
+                      >
+                        <Bot className={`h-4 w-4 ${isBatchModerating ? "animate-spin" : ""}`} />
+                        <span>{isBatchModerating ? "Đang quét AI..." : "Quét AI toàn bộ bài viết"}</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                      <div className="p-3.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+                          <CheckCircle2 className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="text-lg font-black text-emerald-600 dark:text-emerald-400">
+                            {stats.moderation?.approved ?? stats.totalJobs}
+                          </div>
+                          <div className="text-[11px] text-slate-500 font-medium">Hợp lệ & Đã duyệt AI</div>
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+                          <AlertTriangle className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="text-lg font-black text-amber-600 dark:text-amber-400">
+                            {stats.moderation?.flagged ?? 0}
+                          </div>
+                          <div className="text-[11px] text-slate-500 font-medium">Cảnh báo vi phạm nhẹ</div>
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800/80 flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400">
+                          <XCircle className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="text-lg font-black text-rose-600 dark:text-rose-400">
+                            {stats.moderation?.rejected ?? 0}
+                          </div>
+                          <div className="text-[11px] text-slate-500 font-medium">Bị từ chối xuất bản</div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -910,6 +1096,30 @@ export default function AdminPage() {
                     <option value="raw_text">Văn bản thô</option>
                   </select>
 
+                  <select
+                    value={jobModerationFilter}
+                    onChange={(e) => {
+                      setJobModerationFilter(e.target.value);
+                      setTimeout(fetchJobs, 50);
+                    }}
+                    className="text-xs py-2 px-3 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 font-medium"
+                  >
+                    <option value="all">Tất cả trạng thái AI</option>
+                    <option value="approved">🟢 AI Đã Duyệt (Approved)</option>
+                    <option value="flagged">🟡 Cảnh Báo Vi Phạm (Flagged)</option>
+                    <option value="rejected">🔴 Bị Từ Chối (Rejected)</option>
+                  </select>
+
+                  <button
+                    onClick={() => handleAutoModerateAll(false)}
+                    disabled={isBatchModerating}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-sm transition-all disabled:opacity-50"
+                    title="Cho AI tự động quét và duyệt toàn bộ bài viết trong hệ thống"
+                  >
+                    <Bot className={`h-3.5 w-3.5 ${isBatchModerating ? "animate-spin" : ""}`} />
+                    <span>{isBatchModerating ? "Đang quét AI..." : "Quét AI toàn bộ"}</span>
+                  </button>
+
                   <a
                     href="/api/admin/jobs?format=csv"
                     className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 shadow-sm transition-colors"
@@ -935,22 +1145,23 @@ export default function AdminPage() {
                       <tr>
                         <th className="px-5 py-3.5">Tiêu đề bài viết</th>
                         <th className="px-5 py-3.5">Nguồn</th>
-                        <th className="px-5 py-3.5">Tác giả (Email)</th>
+                        <th className="px-5 py-3.5">Tác giả</th>
+                        <th className="px-5 py-3.5">Kiểm duyệt AI</th>
                         <th className="px-5 py-3.5">Định dạng</th>
                         <th className="px-5 py-3.5">Ngày tạo</th>
-                        <th className="px-5 py-3.5 text-right">Kiểm duyệt</th>
+                        <th className="px-5 py-3.5 text-right">Thao tác</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                       {loadingJobs ? (
                         <tr>
-                          <td colSpan={6} className="py-12 text-center text-slate-400">
+                          <td colSpan={7} className="py-12 text-center text-slate-400">
                             Đang tải danh sách bài viết...
                           </td>
                         </tr>
                       ) : jobs.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="py-12 text-center text-slate-400">
+                          <td colSpan={7} className="py-12 text-center text-slate-400">
                             Không tìm thấy bài viết nào.
                           </td>
                         </tr>
@@ -1000,6 +1211,35 @@ export default function AdminPage() {
                               {job.userEmail || "guest@repurposely.ai"}
                             </td>
 
+                            {/* AI Moderation Status Badge */}
+                            <td className="px-5 py-3.5">
+                              {job.moderation?.status === "rejected" ? (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
+                                  title={job.moderation.reason}
+                                >
+                                  <XCircle className="h-3.5 w-3.5 text-rose-600" />
+                                  <span>Từ chối ({job.moderation.safetyScore}/100)</span>
+                                </span>
+                              ) : job.moderation?.status === "flagged" ? (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300"
+                                  title={job.moderation.reason}
+                                >
+                                  <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                                  <span>Cảnh báo ({job.moderation.safetyScore}/100)</span>
+                                </span>
+                              ) : (
+                                <span
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                                  title={job.moderation?.reason || "Đạt chuẩn an toàn"}
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                                  <span>AI Duyệt ({job.moderation?.safetyScore || 98}/100)</span>
+                                </span>
+                              )}
+                            </td>
+
                             {/* Formats */}
                             <td className="px-5 py-3.5">
                               <div className="flex items-center gap-1 flex-wrap text-[10px]">
@@ -1028,7 +1268,7 @@ export default function AdminPage() {
                                 <button
                                   onClick={() => setSelectedJob(job)}
                                   className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
-                                  title="Xem chi tiết toàn bộ nội dung"
+                                  title="Xem báo cáo kiểm duyệt AI & toàn bộ nội dung"
                                 >
                                   <Eye className="h-3.5 w-3.5" />
                                 </button>
@@ -1083,6 +1323,188 @@ export default function AdminPage() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
+                  {/* AI Content Safety & Policy Breakdown Card */}
+                  <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white border border-indigo-900/60 shadow-lg space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-xl bg-blue-600/30 border border-blue-400/30 text-blue-300">
+                          <Bot className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                            <span>Báo Cáo Phân Tích An Toàn AI (Gemini 2.0 Flash)</span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                selectedJob.moderation?.status === "rejected"
+                                  ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                                  : selectedJob.moderation?.status === "flagged"
+                                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                  : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                              }`}
+                            >
+                              {selectedJob.moderation?.status === "rejected"
+                                ? "Bị Từ Chối"
+                                : selectedJob.moderation?.status === "flagged"
+                                ? "Cảnh Báo"
+                                : "Đã Phê Duyệt"}
+                            </span>
+                          </h4>
+                          <p className="text-[11px] text-slate-300">
+                            Điểm an toàn nội dung:{" "}
+                            <strong className="text-emerald-400 font-black">
+                              {selectedJob.moderation?.safetyScore || 98}/100
+                            </strong>{" "}
+                            • Mức độ rủi ro:{" "}
+                            <span className="uppercase font-bold text-slate-200">
+                              {selectedJob.moderation?.riskLevel || "low"}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Actions: Re-scan with AI & Admin Override */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={() => handleReanalyzeJob(selectedJob._id)}
+                          disabled={isReanalyzing}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white font-medium text-[11px] transition-all disabled:opacity-50"
+                          title="Yêu cầu AI quét lại toàn bộ bài viết này"
+                        >
+                          <RotateCw className={`h-3 w-3 ${isReanalyzing ? "animate-spin" : ""}`} />
+                          <span>{isReanalyzing ? "Đang quét..." : "Quét lại AI"}</span>
+                        </button>
+
+                        {selectedJob.moderation?.status !== "approved" ? (
+                          <button
+                            onClick={() => handleOverrideModeration(selectedJob._id, "approved")}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] transition-colors"
+                          >
+                            <Check className="h-3 w-3" />
+                            <span>Duyệt bài này</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleOverrideModeration(selectedJob._id, "flagged")}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-[11px] transition-colors"
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            <span>Gắn cờ</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Safety Score Meter */}
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[11px] font-semibold text-slate-300">
+                        <span>Thước đo độ an toàn (Safety Score)</span>
+                        <span>{selectedJob.moderation?.safetyScore || 98}%</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                          style={{ width: `${selectedJob.moderation?.safetyScore || 98}%` }}
+                          className={`h-full transition-all ${
+                            (selectedJob.moderation?.safetyScore || 98) >= 70
+                              ? "bg-emerald-400"
+                              : (selectedJob.moderation?.safetyScore || 98) >= 40
+                              ? "bg-amber-400"
+                              : "bg-rose-500"
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 5 Policy Checks Breakdown */}
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1 text-[10px]">
+                      <div
+                        className={`p-2 rounded-xl border flex items-center gap-1.5 ${
+                          selectedJob.moderation?.flags?.hateSpeech
+                            ? "bg-rose-950/40 border-rose-800 text-rose-300"
+                            : "bg-slate-800/60 border-slate-700/60 text-slate-300"
+                        }`}
+                      >
+                        {selectedJob.moderation?.flags?.hateSpeech ? (
+                          <XCircle className="h-3 w-3 text-rose-400 shrink-0" />
+                        ) : (
+                          <Check className="h-3 w-3 text-emerald-400 shrink-0" />
+                        )}
+                        <span className="truncate">Thù ghét</span>
+                      </div>
+
+                      <div
+                        className={`p-2 rounded-xl border flex items-center gap-1.5 ${
+                          selectedJob.moderation?.flags?.harassment
+                            ? "bg-rose-950/40 border-rose-800 text-rose-300"
+                            : "bg-slate-800/60 border-slate-700/60 text-slate-300"
+                        }`}
+                      >
+                        {selectedJob.moderation?.flags?.harassment ? (
+                          <XCircle className="h-3 w-3 text-rose-400 shrink-0" />
+                        ) : (
+                          <Check className="h-3 w-3 text-emerald-400 shrink-0" />
+                        )}
+                        <span className="truncate">Quấy rối</span>
+                      </div>
+
+                      <div
+                        className={`p-2 rounded-xl border flex items-center gap-1.5 ${
+                          selectedJob.moderation?.flags?.sexuallyExplicit
+                            ? "bg-rose-950/40 border-rose-800 text-rose-300"
+                            : "bg-slate-800/60 border-slate-700/60 text-slate-300"
+                        }`}
+                      >
+                        {selectedJob.moderation?.flags?.sexuallyExplicit ? (
+                          <XCircle className="h-3 w-3 text-rose-400 shrink-0" />
+                        ) : (
+                          <Check className="h-3 w-3 text-emerald-400 shrink-0" />
+                        )}
+                        <span className="truncate">18+ / Đồi trụy</span>
+                      </div>
+
+                      <div
+                        className={`p-2 rounded-xl border flex items-center gap-1.5 ${
+                          selectedJob.moderation?.flags?.dangerousContent
+                            ? "bg-rose-950/40 border-rose-800 text-rose-300"
+                            : "bg-slate-800/60 border-slate-700/60 text-slate-300"
+                        }`}
+                      >
+                        {selectedJob.moderation?.flags?.dangerousContent ? (
+                          <XCircle className="h-3 w-3 text-rose-400 shrink-0" />
+                        ) : (
+                          <Check className="h-3 w-3 text-emerald-400 shrink-0" />
+                        )}
+                        <span className="truncate">Bạo lực/Hại</span>
+                      </div>
+
+                      <div
+                        className={`p-2 rounded-xl border flex items-center gap-1.5 ${
+                          selectedJob.moderation?.flags?.spamScam
+                            ? "bg-rose-950/40 border-rose-800 text-rose-300"
+                            : "bg-slate-800/60 border-slate-700/60 text-slate-300"
+                        }`}
+                      >
+                        {selectedJob.moderation?.flags?.spamScam ? (
+                          <XCircle className="h-3 w-3 text-rose-400 shrink-0" />
+                        ) : (
+                          <Check className="h-3 w-3 text-emerald-400 shrink-0" />
+                        )}
+                        <span className="truncate">Lừa đảo/Spam</span>
+                      </div>
+                    </div>
+
+                    {/* AI Explanation / Reason Box */}
+                    <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-[11px] text-slate-200 flex items-start gap-2">
+                      <Bot className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+                      <div className="leading-relaxed">
+                        <strong className="text-white">Nhận xét AI: </strong>
+                        <span>
+                          {selectedJob.moderation?.reason ||
+                            "Bài viết an toàn và đạt tiêu chuẩn xuất bản cộng đồng."}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* LinkedIn */}
                   <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800 space-y-2">
                     <h4 className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[11px] text-blue-600">

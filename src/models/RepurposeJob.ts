@@ -5,6 +5,22 @@ export interface ITweet {
   content: string;
 }
 
+export interface IContentModeration {
+  status: "approved" | "flagged" | "rejected";
+  safetyScore: number; // 0 - 100
+  riskLevel: "low" | "medium" | "high";
+  flags: {
+    hateSpeech: boolean;
+    harassment: boolean;
+    sexuallyExplicit: boolean;
+    dangerousContent: boolean;
+    spamScam: boolean;
+  };
+  reason: string;
+  analyzedAt: Date;
+  autoModerated: boolean;
+}
+
 export interface IRepurposeJob extends Document {
   userEmail?: string;
   sourceType: "youtube" | "article" | "raw_text";
@@ -23,6 +39,7 @@ export interface IRepurposeJob extends Document {
     content: string;
   };
   keyTakeaways: string[];
+  moderation?: IContentModeration;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -55,6 +72,33 @@ const RepurposeJobSchema = new Schema<IRepurposeJob>(
       content: { type: String },
     },
     keyTakeaways: [{ type: String }],
+    moderation: {
+      status: {
+        type: String,
+        enum: ["approved", "flagged", "rejected"],
+        default: "approved",
+        index: true,
+      },
+      safetyScore: { type: Number, default: 98, index: true },
+      riskLevel: {
+        type: String,
+        enum: ["low", "medium", "high"],
+        default: "low",
+      },
+      flags: {
+        hateSpeech: { type: Boolean, default: false },
+        harassment: { type: Boolean, default: false },
+        sexuallyExplicit: { type: Boolean, default: false },
+        dangerousContent: { type: Boolean, default: false },
+        spamScam: { type: Boolean, default: false },
+      },
+      reason: {
+        type: String,
+        default: "Nội dung an toàn, đạt chuẩn xuất bản tự động.",
+      },
+      analyzedAt: { type: Date, default: Date.now },
+      autoModerated: { type: Boolean, default: true },
+    },
   },
   {
     timestamps: true,

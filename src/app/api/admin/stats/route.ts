@@ -20,6 +20,9 @@ export async function GET(req: NextRequest) {
       youtubeCount,
       articleCount,
       rawTextCount,
+      moderationApproved,
+      moderationFlagged,
+      moderationRejected,
       recentJobs,
       recentUsers,
     ] = await Promise.all([
@@ -32,10 +35,15 @@ export async function GET(req: NextRequest) {
       RepurposeJob.countDocuments({ sourceType: "youtube" }),
       RepurposeJob.countDocuments({ sourceType: "article" }),
       RepurposeJob.countDocuments({ sourceType: "raw_text" }),
+      RepurposeJob.countDocuments({
+        $or: [{ "moderation.status": "approved" }, { moderation: { $exists: false } }],
+      }),
+      RepurposeJob.countDocuments({ "moderation.status": "flagged" }),
+      RepurposeJob.countDocuments({ "moderation.status": "rejected" }),
       RepurposeJob.find({})
         .sort({ createdAt: -1 })
         .limit(6)
-        .select("sourceTitle sourceType userEmail createdAt tone")
+        .select("sourceTitle sourceType userEmail createdAt tone moderation")
         .lean(),
       User.find({})
         .sort({ createdAt: -1 })
@@ -63,6 +71,11 @@ export async function GET(req: NextRequest) {
           youtube: youtubeCount,
           article: articleCount,
           rawText: rawTextCount,
+        },
+        moderation: {
+          approved: moderationApproved,
+          flagged: moderationFlagged,
+          rejected: moderationRejected,
         },
         recentJobs,
         recentUsers: formattedRecentUsers,

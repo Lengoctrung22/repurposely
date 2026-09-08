@@ -24,6 +24,13 @@
   - **Quản lý người dùng (User Management)**: Tìm kiếm, lọc theo vai trò/trạng thái, phân quyền Admin/User, khóa/mở khóa tài khoản (Ban/Unban) và xóa tài khoản.
   - **Kiểm duyệt nội dung (Content Moderation)**: Duyệt toàn bộ bài viết trên hệ thống, modal xem trước chi tiết (Takeaways, LinkedIn, Twitter, Newsletter), xóa bài vi phạm và xuất báo cáo CSV (`/api/admin/jobs?format=csv`).
   - **Dev Mode Quick Switcher**: Nút chuyển đổi nhanh quyền Admin/User ngay trên thanh thông báo để phục vụ kiểm thử và trải nghiệm tức thì.
+- 🤖 **Động Cơ Kiểm Duyệt Nội Dung Tự Động Bằng AI (Gemini 2.0 Flash Autonomous Moderation)**:
+  - **Tự động 100% không cần Admin duyệt thủ công**: Mọi bài viết sau khi được tạo (`/api/generate`) đều được AI tự động phân tích và chấm điểm an toàn (`safetyScore` 0–100).
+  - **5 Tiêu chuẩn kiểm duyệt toàn diện**: Tự động phát hiện Ngôn từ thù ghét (Hate speech), Quấy rối (Harassment), Nội dung 18+ (Adult), Kích động bạo lực/Nguy hiểm (Violence/Harmful), và Lừa đảo/Cờ bạc/Spam (Spam/Scam/Gambling).
+  - **Phân loại trạng thái thông minh**: Gắn nhãn `Approved` (Đã duyệt an toàn), `Flagged` (Cảnh báo lưu ý) và `Rejected` (Bị từ chối xuất bản) kèm lý do chi tiết từ AI.
+  - **Báo cáo an toàn chi tiết (Safety Breakdown Report)**: Xem thanh đo điểm rủi ro, checklist 5 tiêu chí vi phạm và nhận xét giải thích của AI trong modal chi tiết.
+  - **Quét AI hàng loạt một chạm**: Tính năng "Quét AI toàn bộ bài viết" (`/api/admin/jobs/auto-moderate`) giúp AI tự động rà soát và đánh giá lại toàn bộ cơ sở dữ liệu.
+  - **Quyền can thiệp linh hoạt**: Hỗ trợ Admin duyệt ghi đè (Override Approve), gắn cờ hoặc yêu cầu AI quét lại tức thì.
 
 ---
 
@@ -102,6 +109,7 @@ src/
 │   │   ├── admin/stats/route.ts         # API thống kê tổng quan (KPIs, phân bổ nguồn, hoạt động gần đây)
 │   │   ├── admin/users/route.ts         # API quản lý user (tìm kiếm, đổi vai trò, khóa, xóa)
 │   │   ├── admin/jobs/route.ts          # API kiểm duyệt bài viết & xuất file CSV
+│   │   ├── admin/jobs/auto-moderate/    # API AI quét và kiểm duyệt tự động hàng loạt
 │   │   ├── auth/[...nextauth]/route.ts  # NextAuth endpoints
 │   │   ├── auth/register/route.ts       # API đăng ký tài khoản Email & Mật khẩu
 │   │   ├── auth/login/route.ts          # API đăng nhập tài khoản Email & Mật khẩu
@@ -123,6 +131,7 @@ src/
 ├── lib/
 │   ├── db.ts                            # Mongoose connection singleton
 │   ├── gemini.ts                        # Gemini AI generation & Dynamic Synthesizer
+│   ├── moderation.ts                    # Động cơ AI tự động kiểm duyệt nội dung (Gemini + Heuristic)
 │   ├── utils.ts                         # Helper functions
 │   └── extractors/                      # YouTube & Web scrapers
 └── models/                              # Mongoose schemas (User, RepurposeJob)

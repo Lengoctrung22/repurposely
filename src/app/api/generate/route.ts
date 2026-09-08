@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { RepurposeJob } from "@/models/RepurposeJob";
 import { generateSocialContent, GenerationParams } from "@/lib/gemini";
+import { analyzeContentSafety } from "@/lib/moderation";
 
 export async function POST(req: NextRequest) {
   try {
@@ -39,7 +40,23 @@ export async function POST(req: NextRequest) {
 
     const generated = await generateSocialContent(genParams);
 
-    // 2. Lưu vào MongoDB qua Mongoose
+    // 2. AI Tự động kiểm duyệt an toàn nội dung vừa sinh (Autonomous AI Moderation)
+    const combinedGeneratedText = [
+      generated.linkedinPost?.content,
+      ...(generated.twitterThread || []).map((t) => t.content),
+      generated.newsletter?.content,
+      ...(generated.keyTakeaways || []),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    const moderation = await analyzeContentSafety({
+      title,
+      content: combinedGeneratedText || content,
+      apiKey: activeApiKey,
+    });
+
+    // 3. Lưu vào MongoDB qua Mongoose kèm kết quả AI Moderation
     let savedJobId: string | null = null;
     try {
       await connectToDatabase();
@@ -54,6 +71,7 @@ export async function POST(req: NextRequest) {
         twitterThread: generated.twitterThread,
         newsletter: generated.newsletter,
         keyTakeaways: generated.keyTakeaways,
+        moderation,
       });
       savedJobId = job._id.toString();
     } catch (dbErr) {
@@ -64,6 +82,7 @@ export async function POST(req: NextRequest) {
       success: true,
       jobId: savedJobId,
       data: generated,
+      moderation,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Lỗi xử lý sinh bài viết";
