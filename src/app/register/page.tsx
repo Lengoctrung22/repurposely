@@ -84,6 +84,7 @@ export default function RegisterPage() {
             id: data.user.id,
             name: data.user.name,
             email: data.user.email,
+            role: data.user.role || "user",
           })
         );
       }

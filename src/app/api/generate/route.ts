@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
 
     // 3. Lưu vào MongoDB qua Mongoose kèm kết quả AI Moderation
     let savedJobId: string | null = null;
+    let dbWarning: string | null = null;
     try {
       await connectToDatabase();
       const job = await RepurposeJob.create({
@@ -76,11 +77,14 @@ export async function POST(req: NextRequest) {
       savedJobId = job._id.toString();
     } catch (dbErr) {
       console.warn("Không thể lưu vào MongoDB (hãy kiểm tra xem MongoDB server có đang chạy):", dbErr);
+      dbWarning = "Không thể lưu vào lịch sử bài viết MongoDB (máy chủ cơ sở dữ liệu tạm thời bận hoặc chưa khởi động)";
     }
 
     return NextResponse.json({
       success: true,
       jobId: savedJobId,
+      savedToDatabase: Boolean(savedJobId),
+      ...(dbWarning ? { warning: dbWarning } : {}),
       data: generated,
       moderation,
     });

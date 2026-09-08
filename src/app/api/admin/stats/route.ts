@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { User } from "@/models/User";
 import { RepurposeJob } from "@/models/RepurposeJob";
+import { requireAdmin } from "@/lib/server-auth";
 
 export async function GET(req: NextRequest) {
   try {
+    const authCheck = requireAdmin(req);
+    if ("errorResponse" in authCheck) {
+      return authCheck.errorResponse;
+    }
+
     await connectToDatabase();
 
     const startOfToday = new Date();

@@ -90,14 +90,33 @@ export async function fetchYouTubeDetails(url: string): Promise<YouTubeExtractio
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept-Language": "vi,en-US,en;q=0.9",
       },
+      signal: AbortSignal.timeout(10000),
     });
 
     if (ytPageRes.ok) {
       const pageHtml = await ytPageRes.text();
       
-      // Tìm description trong meta tags
-      const metaMatch = pageHtml.match(/<meta name="description" content="([^"]+)"/);
-      const desc = metaMatch ? metaMatch[1].replace(/\\n/g, "\n").trim() : "";
+      // Hỗ trợ linh hoạt các biến thể meta description và og:description
+      const metaPatterns = [
+        /<meta\s+(?:[^>]*?\s+)?name=["']description["']\s+content=["']([^"']*)["']/i,
+        /<meta\s+(?:[^>]*?\s+)?content=["']([^"']*)["']\s+name=["']description["']/i,
+        /<meta\s+(?:[^>]*?\s+)?property=["']og:description["']\s+content=["']([^"']*)["']/i,
+        /<meta\s+(?:[^>]*?\s+)?content=["']([^"']*)["']\s+property=["']og:description["']/i,
+      ];
+
+      let desc = "";
+      for (const pattern of metaPatterns) {
+        const match = pageHtml.match(pattern);
+        if (match && match[1]) {
+          desc = match[1]
+            .replace(/\\n/g, "\n")
+            .replace(/&amp;/g, "&")
+            .replace(/&#39;/g, "'")
+            .replace(/&quot;/g, '"')
+            .trim();
+          if (desc.length > 50) break;
+        }
+      }
 
       if (desc && desc.length > 50) {
         const synthesizedContent = `Video: ${title}\nTác giả / Kênh: ${authorName || "YouTube Creator"}\n\nMô tả chi tiết nội dung video:\n${desc}`;

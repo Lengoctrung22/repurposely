@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { connectToDatabase } from "@/lib/db";
 import { User } from "@/models/User";
+import { createSessionToken, attachSessionCookie } from "@/lib/server-auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -56,15 +57,27 @@ export async function POST(req: NextRequest) {
       role: "user",
     });
 
-    return NextResponse.json({
+    // 6. Tạo session token & Cookie HttpOnly
+    const token = createSessionToken({
+      id: newUser._id.toString(),
+      name: newUser.name,
+      email: newUser.email,
+      role: newUser.role || "user",
+    });
+
+    const response = NextResponse.json({
       success: true,
       message: "Đăng ký tài khoản thành công!",
       user: {
         id: newUser._id.toString(),
         name: newUser.name,
         email: newUser.email,
+        role: newUser.role || "user",
       },
     });
+
+    attachSessionCookie(response, token);
+    return response;
   } catch (error: unknown) {
     console.error("Lỗi đăng ký tài khoản:", error);
     const msg = error instanceof Error ? error.message : "Đã xảy ra lỗi trong quá trình đăng ký";

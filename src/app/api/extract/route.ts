@@ -41,6 +41,11 @@ export async function POST(req: NextRequest) {
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Đã xảy ra lỗi khi trích xuất dữ liệu";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const isClientError =
+      message.includes("URL") ||
+      message.includes("mạng nội bộ") ||
+      message.includes("không hợp lệ") ||
+      message.includes("quá lớn");
+    return NextResponse.json({ error: message }, { status: isClientError ? 400 : 500 });
   }
 }

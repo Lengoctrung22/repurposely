@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import { RepurposeJob } from "@/models/RepurposeJob";
 import { analyzeContentSafety } from "@/lib/moderation";
+import { requireAdmin } from "@/lib/server-auth";
+import { escapeRegex, sanitizeCsvCell } from "@/lib/utils";
 
 export async function GET(req: NextRequest) {
   try {
+    const authCheck = requireAdmin(req);
+    if ("errorResponse" in authCheck) {
+      return authCheck.errorResponse;
+    }
+
     await connectToDatabase();
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search")?.trim() || "";
@@ -13,18 +21,23 @@ export async function GET(req: NextRequest) {
     const moderationStatus = searchParams.get("moderationStatus");
     const format = searchParams.get("format");
 
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
+    const skip = (page - 1) * limit;
+
     const query: Record<string, unknown> = {};
     if (search) {
+      const safeSearch = escapeRegex(search);
       query.$or = [
-        { sourceTitle: { $regex: search, $options: "i" } },
-        { "linkedinPost.content": { $regex: search, $options: "i" } },
+        { sourceTitle: { $regex: safeSearch, $options: "i" } },
+        { "linkedinPost.content": { $regex: safeSearch, $options: "i" } },
       ];
     }
     if (sourceType && sourceType !== "all") {
       query.sourceType = sourceType;
     }
     if (userEmail) {
-      query.userEmail = { $regex: userEmail, $options: "i" };
+      query.userEmail = { $regex: escapeRegex(userEmail), $options: "i" };
     }
     if (moderationStatus && moderationStatus !== "all") {
       if (moderationStatus === "approved") {
@@ -37,9 +50,74 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const rawJobs = await RepurposeJob.find(query)
-      .sort({ createdAt: -1 })
-      .lean();
+    // Nếu xuất CSV, lấy toàn bộ danh sách khớp bộ lọc (tối đa 1000 dòng để bảo vệ bộ nhớ)
+    if (format === "csv") {
+      const exportJobs = await RepurposeJob.find(query)
+        .sort({ createdAt: -1 })
+        .limit(1000)
+        .lean();
+
+      const csvRows = [
+        [
+          "ID",
+          "Nguon",
+          "Tieu De",
+          "Tac Gia",
+          "Duyet AI",
+          "Diem An Toan",
+          "Muc Do Rui Ro",
+          "Ly Do Kiem Duyet",
+          "So Tweets",
+          "Thoi Gian Tao",
+        ].join(","),
+      ];
+
+      for (const job of exportJobs) {
+        // Áp dụng sanitizeCsvCell để chống triệt để CSV / Formula Injection (CWE-1236)
+        const idClean = sanitizeCsvCell(job._id.toString());
+        const sourceClean = sanitizeCsvCell(job.sourceType);
+        const titleClean = sanitizeCsvCell(job.sourceTitle || "");
+        const authorClean = sanitizeCsvCell(job.userEmail || "anonymous");
+        const statusClean = sanitizeCsvCell(job.moderation?.status || "approved");
+        const scoreClean = sanitizeCsvCell(job.moderation?.safetyScore ?? 100);
+        const riskClean = sanitizeCsvCell(job.moderation?.riskLevel || "low");
+        const reasonClean = sanitizeCsvCell(job.moderation?.reason || "");
+        const tweetsClean = sanitizeCsvCell(job.twitterThread?.length || 0);
+        const dateClean = sanitizeCsvCell(new Date(job.createdAt).toISOString());
+
+        csvRows.push(
+          [
+            idClean,
+            sourceClean,
+            titleClean,
+            authorClean,
+            statusClean,
+            scoreClean,
+            riskClean,
+            reasonClean,
+            tweetsClean,
+            dateClean,
+          ].join(",")
+        );
+      }
+
+      const csvContent = csvRows.join("\n");
+      return new NextResponse(csvContent, {
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename=repurposely-moderated-jobs-${Date.now()}.csv`,
+        },
+      });
+    }
+
+    const [totalJobs, rawJobs] = await Promise.all([
+      RepurposeJob.countDocuments(query),
+      RepurposeJob.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
 
     // Chuẩn hóa moderation field cho các bài viết cũ nếu chưa có
     const jobs = rawJobs.map((job: any) => ({
@@ -61,53 +139,16 @@ export async function GET(req: NextRequest) {
       },
     }));
 
-    // Xuất CSV nếu format=csv
-    if (format === "csv") {
-      const csvRows = [
-        [
-          "ID",
-          "Nguon",
-          "Tieu De",
-          "Tac Gia",
-          "Duyet AI",
-          "Diem An Toan",
-          "Muc Do Rui Ro",
-          "Ly Do Kiem Duyet",
-          "So Tweets",
-          "Thoi Gian Tao",
-        ].join(","),
-      ];
-
-      for (const job of jobs) {
-        const titleClean = `"${(job.sourceTitle || "").replace(/"/g, '""')}"`;
-        const reasonClean = `"${(job.moderation?.reason || "").replace(/"/g, '""')}"`;
-        const dateClean = new Date(job.createdAt).toISOString();
-        csvRows.push(
-          [
-            job._id.toString(),
-            job.sourceType,
-            titleClean,
-            job.userEmail || "anonymous",
-            job.moderation?.status || "approved",
-            job.moderation?.safetyScore || 100,
-            job.moderation?.riskLevel || "low",
-            reasonClean,
-            job.twitterThread?.length || 0,
-            dateClean,
-          ].join(",")
-        );
-      }
-
-      const csvContent = csvRows.join("\n");
-      return new NextResponse(csvContent, {
-        headers: {
-          "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename=repurposely-moderated-jobs-${Date.now()}.csv`,
-        },
-      });
-    }
-
-    return NextResponse.json({ success: true, jobs });
+    return NextResponse.json({
+      success: true,
+      jobs,
+      pagination: {
+        total: totalJobs,
+        page,
+        limit,
+        totalPages: Math.ceil(totalJobs / limit) || 1,
+      },
+    });
   } catch (error: unknown) {
     console.error("Lỗi lấy danh sách bài viết Admin:", error);
     const msg = error instanceof Error ? error.message : "Lỗi truy vấn bài viết";
@@ -117,12 +158,17 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const authCheck = requireAdmin(req);
+    if ("errorResponse" in authCheck) {
+      return authCheck.errorResponse;
+    }
+
     await connectToDatabase();
     const body = await req.json();
     const { jobId, status, reason, reanalyze } = body;
 
-    if (!jobId) {
-      return NextResponse.json({ error: "Thiếu jobId cần xử lý" }, { status: 400 });
+    if (!jobId || !mongoose.isValidObjectId(jobId)) {
+      return NextResponse.json({ error: "ID bài viết không hợp lệ" }, { status: 400 });
     }
 
     const job = await RepurposeJob.findById(jobId);
@@ -208,17 +254,22 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const authCheck = requireAdmin(req);
+    if ("errorResponse" in authCheck) {
+      return authCheck.errorResponse;
+    }
+
     await connectToDatabase();
     const { searchParams } = new URL(req.url);
     const jobId = searchParams.get("jobId");
 
-    if (!jobId) {
-      return NextResponse.json({ error: "Thiếu jobId cần xóa" }, { status: 400 });
+    if (!jobId || !mongoose.isValidObjectId(jobId)) {
+      return NextResponse.json({ error: "ID bài viết không hợp lệ" }, { status: 400 });
     }
 
     const deleted = await RepurposeJob.findByIdAndDelete(jobId);
     if (!deleted) {
-      return NextResponse.json({ error: "Không tìm thấy bài viết" }, { status: 404 });
+      return NextResponse.json({ error: "Không tìm thấy bài viết để xóa" }, { status: 404 });
     }
 
     return NextResponse.json({

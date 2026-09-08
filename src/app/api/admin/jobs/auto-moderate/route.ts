@@ -2,9 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { RepurposeJob } from "@/models/RepurposeJob";
 import { analyzeContentSafety } from "@/lib/moderation";
+import { requireAdmin } from "@/lib/server-auth";
+
+const BATCH_LIMIT = 15; // Giới hạn tối đa 15 bài/lần quét để tránh Gateway Timeout (504) trên môi trường Serverless
 
 export async function POST(req: NextRequest) {
   try {
+    const authCheck = requireAdmin(req);
+    if ("errorResponse" in authCheck) {
+      return authCheck.errorResponse;
+    }
+
     await connectToDatabase();
     let forceAll = false;
     try {
@@ -22,7 +30,8 @@ export async function POST(req: NextRequest) {
       ];
     }
 
-    const jobs = await RepurposeJob.find(query);
+    const totalMatching = await RepurposeJob.countDocuments(query);
+    const jobs = await RepurposeJob.find(query).limit(BATCH_LIMIT);
 
     let approvedCount = 0;
     let flaggedCount = 0;
@@ -51,13 +60,19 @@ export async function POST(req: NextRequest) {
       else if (modResult.status === "rejected") rejectedCount++;
     }
 
+    const remainingCount = Math.max(0, totalMatching - jobs.length);
+
     return NextResponse.json({
       success: true,
       processedCount: jobs.length,
+      remainingCount,
+      hasMore: remainingCount > 0,
       approvedCount,
       flaggedCount,
       rejectedCount,
-      message: `AI đã hoàn tất quét và kiểm duyệt tự động ${jobs.length} bài viết (${approvedCount} hợp lệ, ${flaggedCount} cảnh báo, ${rejectedCount} từ chối).`,
+      message: `AI đã hoàn tất quét đợt này (${jobs.length} bài: ${approvedCount} hợp lệ, ${flaggedCount} cảnh báo, ${rejectedCount} từ chối).${
+        remainingCount > 0 ? ` Còn ${remainingCount} bài viết cần quét tiếp.` : ""
+      }`,
     });
   } catch (error: unknown) {
     console.error("Lỗi quét AI tự động toàn bộ:", error);

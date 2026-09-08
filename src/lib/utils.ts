@@ -14,3 +14,22 @@ export function formatDate(date: Date | string) {
     minute: "2-digit",
   });
 }
+
+/**
+ * Escapes special regular expression characters to prevent ReDoS and regex injection.
+ */
+export function escapeRegex(text: string): string {
+  return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+}
+
+/**
+ * Sanitizes CSV cell values to neutralize CSV / Formula Injection (CWE-1236).
+ */
+export function sanitizeCsvCell(val: unknown): string {
+  const str = String(val ?? "").replace(/"/g, '""');
+  // If the cell begins with formula triggers, prepend a single quote to treat as text in Excel/Sheets
+  if (/^[=+\-@\t\r]/.test(str)) {
+    return `"'${str}"`;
+  }
+  return `"${str}"`;
+}
