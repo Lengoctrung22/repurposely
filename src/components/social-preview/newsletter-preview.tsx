@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Mail,
   Check,
@@ -69,9 +69,11 @@ export function NewsletterPreview({
   const [copiedSubject, setCopiedSubject] = useState(false);
 
   // Sync if initialNewsletter changes
-  if (initialNewsletter && initialNewsletter.subject !== newsletter.subject && !isEditing) {
-    setNewsletter(initialNewsletter);
-  }
+  useEffect(() => {
+    if (initialNewsletter) {
+      setNewsletter(initialNewsletter);
+    }
+  }, [initialNewsletter]);
 
   const fullMarkdown = `# ${newsletter.subject}\n\n*${newsletter.previewText}*\n\n${newsletter.content}`;
 
@@ -103,6 +105,7 @@ export function NewsletterPreview({
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+    URL.revokeObjectURL(element.href);
   };
 
   return (

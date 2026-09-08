@@ -410,7 +410,7 @@ export function UrlInputForm({ onGenerated }: UrlInputFormProps) {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setTone(item.id as any)}
+                onClick={() => setTone(item.id as typeof tone)}
                 className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
                   tone === item.id
                     ? "border-blue-600 bg-blue-50/70 text-blue-950 dark:border-blue-500 dark:bg-blue-950/40 dark:text-blue-200 ring-2 ring-blue-500/20"

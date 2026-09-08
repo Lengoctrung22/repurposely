@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Check,
   Copy,
@@ -42,6 +42,18 @@ export function TwitterThreadPreview({
     setTweets(initialTweets);
     setEditingIndex(null);
   }, [initialTweets]);
+
+  // Generate stable random engagement stats to avoid hydration mismatch
+  const engagementStats = useMemo(
+    () =>
+      initialTweets.map(() => ({
+        comments: Math.floor(Math.random() * 15) + 3,
+        reposts: Math.floor(Math.random() * 30) + 8,
+        likes: Math.floor(Math.random() * 120) + 25,
+        bookmarks: Math.floor(Math.random() * 45) + 5,
+      })),
+    [initialTweets]
+  );
 
   const handleUpdateTweet = (index: number, newText: string) => {
     const updated = [...tweets];
@@ -105,6 +117,7 @@ export function TwitterThreadPreview({
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+    URL.revokeObjectURL(element.href);
   };
 
   return (
@@ -265,19 +278,19 @@ export function TwitterThreadPreview({
                   <div className="flex items-center justify-between mt-3 text-slate-400 max-w-sm text-xs">
                     <span className="flex items-center gap-1 hover:text-blue-500 cursor-pointer transition-colors">
                       <MessageCircle className="h-3.5 w-3.5" />
-                      <span>{Math.floor(Math.random() * 15) + 3}</span>
+                      <span>{engagementStats[idx]?.comments ?? 5}</span>
                     </span>
                     <span className="flex items-center gap-1 hover:text-emerald-500 cursor-pointer transition-colors">
                       <Repeat className="h-3.5 w-3.5" />
-                      <span>{Math.floor(Math.random() * 30) + 8}</span>
+                      <span>{engagementStats[idx]?.reposts ?? 12}</span>
                     </span>
                     <span className="flex items-center gap-1 hover:text-rose-500 cursor-pointer transition-colors">
                       <Heart className="h-3.5 w-3.5" />
-                      <span>{Math.floor(Math.random() * 120) + 25}</span>
+                      <span>{engagementStats[idx]?.likes ?? 42}</span>
                     </span>
                     <span className="flex items-center gap-1 hover:text-blue-500 cursor-pointer transition-colors">
                       <Bookmark className="h-3.5 w-3.5" />
-                      <span>{Math.floor(Math.random() * 45) + 5}</span>
+                      <span>{engagementStats[idx]?.bookmarks ?? 8}</span>
                     </span>
                     <span className="flex items-center gap-1 hover:text-slate-600 cursor-pointer transition-colors">
                       <Share className="h-3.5 w-3.5" />

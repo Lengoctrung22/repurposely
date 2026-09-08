@@ -16,7 +16,6 @@ import {
   CheckCircle2,
   ArrowRight,
   ExternalLink,
-  Layers,
   FileText,
   Mail,
   X,
@@ -218,7 +217,7 @@ export default function HomePage() {
         <section className="text-center max-w-3xl mx-auto space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/60 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-900/60">
             <Sparkles className="h-3.5 w-3.5" />
-            <span>Gemini 2.0 Flash • Next.js 15 • MongoDB Compass Ready</span>
+            <span>Gemini 2.5 Flash • Next.js 16 • MongoDB Compass Ready</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-[1.15]">
@@ -412,7 +411,7 @@ export default function HomePage() {
                 2
               </div>
               <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-                Gemini 2.0 Flash Engine
+                Gemini 2.5 Flash Engine
               </h4>
               <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                 Tận dụng context window cực lớn của Gemini để xử lý trọn vẹn tài liệu dài, cấu trúc hóa thành 3 định dạng: LinkedIn, X Thread và Newsletter.

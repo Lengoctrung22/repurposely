@@ -13,8 +13,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Check,
-  User,
 } from "lucide-react";
 
 export default function LoginPage() {
@@ -166,13 +164,13 @@ export default function LoginPage() {
                   <Lock className="h-3.5 w-3.5 text-blue-600" />
                   <span>Mật khẩu</span>
                 </label>
-                <Link
-                  href="/login"
+                <button
+                  type="button"
                   onClick={() => alert("Nếu bạn quên mật khẩu, vui lòng đăng nhập bằng Chế độ Demo/Khách hoặc đăng ký tài khoản mới.")}
                   className="text-[11px] text-blue-600 hover:underline dark:text-blue-400"
                 >
                   Quên mật khẩu?
-                </Link>
+                </button>
               </div>
 
               <div className="relative">

@@ -14,8 +14,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Check,
-  ShieldCheck,
 } from "lucide-react";
 
 export default function RegisterPage() {

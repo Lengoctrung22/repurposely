@@ -34,7 +34,6 @@ import {
   Check,
   AlertTriangle,
   XCircle,
-  Cpu,
   RotateCw,
 } from "lucide-react";
 import { YoutubeIcon } from "@/components/icons";
@@ -134,7 +133,7 @@ interface AdminJob {
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<"analytics" | "users" | "jobs">("analytics");
   const [isAdmin, setIsAdmin] = useState<boolean>(true);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string; role?: string; id?: string } | null>(null);
 
   // Stats State
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -676,7 +675,7 @@ export default function AdminPage() {
                             </span>
                           </h3>
                           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                            Tự động đánh giá 5 tiêu chuẩn cộng đồng qua Google Gemini 2.0 Flash mà không cần Admin can thiệp thủ công.
+                            Tự động đánh giá 5 tiêu chuẩn cộng đồng qua Google Gemini 2.5 Flash mà không cần Admin can thiệp thủ công.
                           </p>
                         </div>
                       </div>
@@ -1332,7 +1331,7 @@ export default function AdminPage() {
                         </div>
                         <div>
                           <h4 className="font-bold text-sm text-white flex items-center gap-2">
-                            <span>Báo Cáo Phân Tích An Toàn AI (Gemini 2.0 Flash)</span>
+                            <span>Báo Cáo Phân Tích An Toàn AI (Gemini 2.5 Flash)</span>
                             <span
                               className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                                 selectedJob.moderation?.status === "rejected"

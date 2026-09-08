@@ -19,11 +19,9 @@ import {
   RefreshCw,
   Download,
   Eye,
-  SlidersHorizontal,
-  Mail,
   ChevronRight,
-  Terminal,
   X,
+  Mail,
 } from "lucide-react";
 import { YoutubeIcon } from "@/components/icons";
 import { formatDate } from "@/lib/utils";
@@ -160,6 +158,7 @@ ${job.newsletter.content}`
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+    URL.revokeObjectURL(element.href);
   };
 
   const handleExportAllJson = () => {
@@ -172,6 +171,7 @@ ${job.newsletter.content}`
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+    URL.revokeObjectURL(element.href);
   };
 
   const filteredJobs = jobs.filter((job) => {
@@ -283,7 +283,7 @@ ${job.newsletter.content}`
             ].map((f) => (
               <button
                 key={f.id}
-                onClick={() => setFilterType(f.id as any)}
+                onClick={() => setFilterType(f.id as typeof filterType)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
                   filterType === f.id
                     ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm"

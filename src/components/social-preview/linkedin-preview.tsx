@@ -61,6 +61,7 @@ export function LinkedInPreview({
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+    URL.revokeObjectURL(element.href);
   };
 
   // Truncation simulation: LinkedIn truncates roughly after 3-4 lines (~200 chars)
